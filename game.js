@@ -359,6 +359,9 @@
     showCard(`<h2>조작법</h2>
       <div class="keys">
         <kbd>클릭 · 탭</kbd><span>그 자리로 걸어갑니다. 사람이나 게시판을 누르면 다가가서 말을 겁니다</span>
+        <kbd>조이스틱</kbd><span>휴대폰: 왼쪽 아래 원을 누른 채 끌면 그 방향으로 계속 걷습니다. 오른쪽 아래 버튼이 노랗게 켜지면 눌러서 대화</span>
+        <kbd>지도 끌기</kbd><span>화면을 손가락이나 마우스로 끌면 다른 곳을 둘러봅니다. 걷기 시작하거나 '내 위치로'를 누르면 돌아옵니다</span>
+        <kbd>미니맵</kbd><span>오른쪽 위 전체 지도. 노란 점이 목표, 파란 점이 나. 누르면 그곳을 봅니다</span>
         <kbd>방향키 · WASD</kbd><span>한 칸씩 이동</span>
         <kbd>Space · Enter</kbd><span>옆에 있는 대상과 대화, 대사 넘기기</span>
         <kbd>1 ~ 4</kbd><span>선택지 고르기</span>
@@ -395,20 +398,27 @@
     if (path) { player.path = path; player.pendingTalk = null; clickMark = { x: tx, y: ty, t: 0 }; }
   }
   const SPEED = 5.5 * T;   // px/s
+  const DIRV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  const joy = { dirs: [] };
   function updatePlayer(dt) {
     if (!player.moving) {
       let next = null;
       if (player.path.length) next = player.path.shift();
       else if (!busy) {
-        const k = [...held].pop();
-        const d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[k];
-        if (d) { player.dir = k; if (walkable(player.x + d[0], player.y + d[1])) next = [player.x + d[0], player.y + d[1]]; }
+        const key = [...held].pop();
+        const dirs = joy.dirs.length ? joy.dirs : key ? [key] : [];
+        if (dirs.length) player.dir = dirs[0];
+        for (const k of dirs) {
+          const d = DIRV[k];
+          if (walkable(player.x + d[0], player.y + d[1])) { next = [player.x + d[0], player.y + d[1]]; break; }
+        }
       }
       if (next) {
         const [nx, ny] = next;
         if (!walkable(nx, ny)) { player.path = []; return; }
         player.dir = nx > player.x ? "right" : nx < player.x ? "left" : ny > player.y ? "down" : "up";
         player.moving = { x: nx, y: ny };
+        view.recenter = true;          // 걷기 시작하면 시점을 캐릭터로 되돌린다
       } else if (player.pendingTalk) {
         const id = player.pendingTalk; player.pendingTalk = null; clickMark = null; talk(id);
       }
@@ -439,12 +449,106 @@
   addEventListener("keyup", (e) => { const k = KEYMAP[e.code]; if (k) held.delete(k); });
   addEventListener("blur", () => held.clear());
 
-  let view = { scale: 3, camX: 0, camY: 0, w: 0, h: 0, dpr: 1 };
+  let view = { scale: 3, camX: 0, camY: 0, w: 0, h: 0, dpr: 1, panX: 0, panY: 0, recenter: false };
+  let drag = null;
+  const capture = (el, e) => { try { el.setPointerCapture(e.pointerId); } catch {} };
   canvas.addEventListener("pointerdown", (e) => {
     if (busy) { if (advance) advance(); return; }
-    const wx = e.clientX / view.scale + view.camX, wy = e.clientY / view.scale + view.camY;
-    goTo(Math.floor(wx / T), Math.floor(wy / T));
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false };
+    capture(canvas, e);
   });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 10) drag.moved = true;
+    if (drag.moved) {
+      view.panX -= (e.clientX - drag.x) / view.scale; view.panY -= (e.clientY - drag.y) / view.scale;
+      view.recenter = false;
+    }
+    drag.x = e.clientX; drag.y = e.clientY;
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const wasTap = !drag.moved; drag = null;
+    if (wasTap && !busy) {
+      const wx = e.clientX / view.scale + view.camX, wy = e.clientY / view.scale + view.camY;
+      goTo(Math.floor(wx / T), Math.floor(wy / T));
+    }
+  });
+  canvas.addEventListener("pointercancel", () => { drag = null; });
+
+  // 조이스틱: 누른 채 끌면 그 방향으로 계속 걷는다. 대각선이면 막힌 축 대신 다른 축으로 미끄러진다
+  const stick = $("stick"), knob = $("knob");
+  let stickId = null;
+  function stickUpdate(e) {
+    const r = stick.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2, R = r.width / 2 - 14;
+    let dx = e.clientX - cx, dy = e.clientY - cy;
+    const m = Math.hypot(dx, dy);
+    if (m > R) { dx = dx / m * R; dy = dy / m * R; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    if (m < R * 0.28) { joy.dirs = []; return; }
+    const h = dx > 0 ? "right" : "left", v = dy > 0 ? "down" : "up";
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    joy.dirs = ax > ay ? (ay > ax * 0.45 ? [h, v] : [h]) : (ax > ay * 0.45 ? [v, h] : [v]);
+    player.path = []; player.pendingTalk = null; clickMark = null;
+  }
+  function stickEnd() { stickId = null; joy.dirs = []; knob.style.transform = ""; }
+  stick.addEventListener("pointerdown", (e) => { if (busy) return; stickId = e.pointerId; capture(stick, e); stickUpdate(e); e.preventDefault(); });
+  stick.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickUpdate(e); });
+  stick.addEventListener("pointerup", (e) => { if (e.pointerId === stickId) stickEnd(); });
+  stick.addEventListener("pointercancel", stickEnd);
+  $("actBtn").addEventListener("click", () => {
+    if (advance) { advance(); return; }
+    if (busy) return;
+    const id = adjacentNpc(); if (id) talk(id);
+  });
+  $("homeBtn").addEventListener("click", () => { view.recenter = true; });
+  const isTouch = () => document.body.classList.contains("touch");
+  if (matchMedia("(pointer: coarse)").matches) document.body.classList.add("touch");
+  addEventListener("touchstart", () => document.body.classList.add("touch"), { once: true, passive: true });
+
+  // 미니맵: 전체 지도, 현재 화면 범위, 나와 목표 위치. 누르거나 끌면 그곳으로 시점 이동
+  const mini = $("mini"), mctx = mini.getContext("2d");
+  let miniOn = true;
+  try { miniOn = localStorage.getItem("oidcQuest.mini") !== "off"; } catch {}
+  function miniSize() { return view.w < 560 ? 2.4 : 3.2; }
+  function layoutMini() {
+    const m = miniSize(), dpr = view.dpr;
+    mini.style.width = MW * m + "px"; mini.style.height = MH * m + "px";
+    mini.width = Math.round(MW * m * dpr); mini.height = Math.round(MH * m * dpr);
+    mini.hidden = !miniOn;
+    $("miniBtn").textContent = miniOn ? "지도 숨기기" : "지도";
+  }
+  function miniLook(e) {
+    const r = mini.getBoundingClientRect();
+    const wx = (e.clientX - r.left) / r.width * MW * T, wy = (e.clientY - r.top) / r.height * MH * T;
+    view.panX = wx - (player.fx + T / 2); view.panY = wy - (player.fy + T / 2);
+    view.recenter = false;
+  }
+  let miniDrag = null;
+  mini.addEventListener("pointerdown", (e) => { if (busy) return; miniDrag = e.pointerId; capture(mini, e); miniLook(e); });
+  mini.addEventListener("pointermove", (e) => { if (e.pointerId === miniDrag) miniLook(e); });
+  mini.addEventListener("pointerup", () => { miniDrag = null; });
+  mini.addEventListener("pointercancel", () => { miniDrag = null; });
+  $("miniBtn").addEventListener("click", () => {
+    miniOn = !miniOn; try { localStorage.setItem("oidcQuest.mini", miniOn ? "on" : "off"); } catch {}
+    layoutMini();
+  });
+  function drawMini() {
+    if (!miniOn) return;
+    const k = mini.width / (MW * T);
+    mctx.setTransform(1, 0, 0, 1, 0, 0);
+    mctx.imageSmoothingEnabled = true;
+    mctx.drawImage(mapCanvas, 0, 0, mini.width, mini.height);
+    mctx.setTransform(k, 0, 0, k, 0, 0);
+    for (const n of Object.values(NPCS)) { mctx.fillStyle = "#ffffff"; mctx.fillRect(n.x * T + 3, n.y * T + 3, 10, 10); }
+    const tid = targetId();
+    if (tid && Math.floor(elapsed * 3) % 2 === 0) { const n = NPCS[tid]; mctx.fillStyle = "#ffd43b"; mctx.fillRect(n.x * T - 6, n.y * T - 6, 28, 28); }
+    mctx.fillStyle = "#15aabf"; mctx.strokeStyle = "#ffffff"; mctx.lineWidth = 4 / k * 0.5;
+    mctx.beginPath(); mctx.arc(player.fx + 8, player.fy + 8, 14, 0, Math.PI * 2); mctx.fill(); mctx.stroke();
+    mctx.strokeStyle = "rgba(255,212,59,.95)"; mctx.lineWidth = 2 / k;
+    mctx.strokeRect(view.camX, view.camY, view.w / view.scale, view.h / view.scale);
+  }
 
   // ------------------------------------------------------------------ 그리기
   function resize() {
@@ -453,7 +557,8 @@
     canvas.width = Math.round(view.w * view.dpr); canvas.height = Math.round(view.h * view.dpr);
     view.scale = Math.max(2, Math.min(4, Math.floor(Math.min(view.w / (T * 26), view.h / (T * 15)))));
   }
-  addEventListener("resize", resize); resize();
+  addEventListener("resize", () => { resize(); layoutMini(); });
+  resize();
 
   function drawPerson(x, y, body, hair, dir, phase, moving) {
     const p = (a, b, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x + a, y + b, w, h); };
@@ -521,9 +626,15 @@
     const { dpr, scale } = view;
     // 카메라
     const vw = view.w / scale, vh = view.h / scale;
-    let cx = player.fx + T / 2 - vw / 2, cy = player.fy + T / 2 - vh / 2;
-    cx = vw >= MW * T ? (MW * T - vw) / 2 : Math.max(0, Math.min(MW * T - vw, cx));
-    cy = vh >= MH * T ? (MH * T - vh) / 2 : Math.max(0, Math.min(MH * T - vh, cy));
+    const clampX = (x) => vw >= MW * T ? (MW * T - vw) / 2 : Math.max(0, Math.min(MW * T - vw, x));
+    const clampY = (y) => vh >= MH * T ? (MH * T - vh) / 2 : Math.max(0, Math.min(MH * T - vh, y));
+    const fx = clampX(player.fx + T / 2 - vw / 2), fy = clampY(player.fy + T / 2 - vh / 2);
+    if (view.recenter) {
+      view.panX *= 0.82; view.panY *= 0.82;
+      if (Math.abs(view.panX) < 0.5 && Math.abs(view.panY) < 0.5) { view.panX = view.panY = 0; view.recenter = false; }
+    }
+    const cx = clampX(fx + view.panX), cy = clampY(fy + view.panY);
+    view.panX = cx - fx; view.panY = cy - fy;
     view.camX = Math.round(cx * scale) / scale; view.camY = Math.round(cy * scale) / scale;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -586,6 +697,15 @@
     }
   }
 
+  let uiBusy = null, uiReady = null, uiAway = null;
+  function syncTouchUi() {
+    if (busy !== uiBusy) { uiBusy = busy; document.body.classList.toggle("busy", busy); if (busy) stickEnd(); }
+    const ready = !busy && !!adjacentNpc() && !player.moving;
+    if (ready !== uiReady) { uiReady = ready; $("actBtn").classList.toggle("ready", ready); }
+    const away = Math.hypot(view.panX, view.panY) > 24;
+    if (away !== uiAway) { uiAway = away; $("homeBtn").hidden = !away; }
+  }
+
   // 고정 60Hz 업데이트, 화면 주사율과 무관하게 같은 속도
   let last = performance.now(), acc = 0;
   const STEP = 1 / 60;
@@ -593,12 +713,15 @@
     acc += Math.min(1, (now - last) / 1000); last = now;
     while (acc >= STEP) { updatePlayer(STEP); elapsed += STEP; acc -= STEP; }
     draw();
+    drawMini();
+    syncTouchUi();
     requestAnimationFrame(frame);
   }
 
+  layoutMini();
   renderHud();
   state.started = !!saved;
   showMenu();
   requestAnimationFrame(frame);
-  window.__quest = { state, player, goTo, talk, NPCS, findPath, neighbors };   // 디버그용
+  window.__quest = { tick: (n) => { for (let i = 0; i < n; i++) updatePlayer(STEP); syncTouchUi(); }, state, player, view, goTo, talk, NPCS, findPath, neighbors };   // 디버그용
 })();

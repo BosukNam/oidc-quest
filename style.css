@@ -16,7 +16,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #1b2a1d; color: var(--ink); font-family: var(--f-body); }
 body { touch-action: none; -webkit-user-select: none; user-select: none; }
-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: pointer; }
+#world { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: pointer; }
 button { font: inherit; color: inherit; cursor: pointer; }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 [hidden] { display: none !important; }
@@ -103,6 +103,37 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .keys kbd { font-family: var(--f-display); color: var(--gold); }
 .foot { font-size: 12.5px; color: var(--muted); }
 .foot a { color: var(--muted); }
+
+/* 오른쪽 열: 버튼 + 미니맵 */
+.right-col { display: grid; gap: 8px; justify-items: end; pointer-events: none; }
+.mini { pointer-events: auto; border: 2px solid var(--panel-line); border-radius: 6px; background: #1b2a1d; box-shadow: 0 3px 0 rgba(0,0,0,.35); cursor: crosshair; image-rendering: auto; touch-action: none; }
+
+/* 조이스틱·대화 버튼은 터치 기기에서만 */
+.stick, .act { display: none; }
+body.touch .stick {
+  display: block; position: fixed; left: 18px; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+  width: 128px; height: 128px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(20,26,46,.35) 0 55%, rgba(20,26,46,.6) 56%);
+  border: 2px solid rgba(108,123,209,.8); touch-action: none;
+}
+.knob {
+  position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%;
+  background: var(--panel-line); border: 3px solid #c5cdf5; box-shadow: 0 3px 0 rgba(0,0,0,.35); pointer-events: none;
+}
+body.touch .act {
+  display: block; position: fixed; right: 22px; bottom: calc(env(safe-area-inset-bottom, 0px) + 38px);
+  width: 78px; height: 78px; border-radius: 50%; background: rgba(20,26,46,.7); border: 3px solid #4b5aa8;
+  color: var(--muted); font-family: var(--f-display); font-size: 19px; touch-action: manipulation;
+}
+body.touch .act.ready { background: var(--gold); border-color: #fff3bf; color: #1b1f3b; }
+.home {
+  position: fixed; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 130px);
+  background: var(--panel); border: 2px solid var(--gold); color: var(--gold); border-radius: 999px;
+  padding: 7px 14px; font-family: var(--f-display); font-size: 15px;
+}
+body:not(.touch) .home { bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); }
+body.touch .inv { bottom: calc(env(safe-area-inset-bottom, 0px) + 160px); }
+body.busy .stick, body.busy .act, body.busy .home { display: none; }
 
 @media (max-width: 520px) {
   .quest { max-width: calc(100vw - 120px); padding: 6px 9px; }

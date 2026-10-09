@@ -21,14 +21,22 @@
     <div class="goal"><span class="tag">목표</span><b id="goal">-</b></div>
     <div class="hearts" id="hearts" aria-label="보안 신뢰도"></div>
   </section>
-  <nav class="hud-btns">
-    <button type="button" id="menuBtn">장 선택</button>
-    <button type="button" id="helpBtn">조작법</button>
-  </nav>
+  <div class="right-col">
+    <nav class="hud-btns">
+      <button type="button" id="menuBtn">장 선택</button>
+      <button type="button" id="helpBtn">조작법</button>
+      <button type="button" id="miniBtn">지도 숨기기</button>
+    </nav>
+    <canvas id="mini" class="mini" aria-label="전체 지도. 누르면 그곳을 봅니다"></canvas>
+  </div>
 </header>
 
 <div id="inv" class="inv" aria-label="가진 것"></div>
 <div id="toast" class="toast" role="status"></div>
+
+<div id="stick" class="stick" aria-label="이동 조이스틱"><div id="knob" class="knob"></div></div>
+<button type="button" id="actBtn" class="act">대화</button>
+<button type="button" id="homeBtn" class="home" hidden>내 위치로</button>
 
 <section id="dialog" class="dialog" hidden>
   <div class="who" id="dlgWho"></div>
