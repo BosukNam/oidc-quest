@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>OIDC 퀘스트</title>
+<meta name="description" content="마을을 돌아다니며 OIDC 로그인 흐름과 공격을 직접 체험하는 2D 어드벤처 게임">
+<meta property="og:title" content="OIDC 퀘스트">
+<meta property="og:description" content="state, PKCE, JWKS, 키 교체, 401과 403까지. 걸어 다니며 배우는 OIDC.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="world" aria-label="게임 화면. 클릭하거나 탭한 곳으로 이동합니다"></canvas>
+
+<header id="hud">
+  <section class="panel quest" aria-live="polite">
+    <div class="ch" id="chTitle">OIDC 퀘스트</div>
+    <div class="goal"><span class="tag">목표</span><b id="goal">-</b></div>
+    <div class="hearts" id="hearts" aria-label="보안 신뢰도"></div>
+  </section>
+  <nav class="hud-btns">
+    <button type="button" id="menuBtn">장 선택</button>
+    <button type="button" id="helpBtn">조작법</button>
+  </nav>
+</header>
+
+<div id="inv" class="inv" aria-label="가진 것"></div>
+<div id="toast" class="toast" role="status"></div>
+
+<section id="dialog" class="dialog" hidden>
+  <div class="who" id="dlgWho"></div>
+  <div class="text" id="dlgText"></div>
+  <div class="choices" id="dlgChoices"></div>
+  <div class="more" id="dlgMore">▼</div>
+</section>
+
+<div id="overlay" class="overlay" hidden>
+  <div class="card" id="card"></div>
+</div>
+
+<script src="quests.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
