@@ -358,8 +358,35 @@
   }
 
   // ------------------------------------------------------------------ 오버레이
-  function showCard(html) { busy = true; $("card").innerHTML = html; $("overlay").hidden = false; $("card").querySelector("button")?.focus({ preventScroll: true }); }
-  function hideCard() { $("overlay").hidden = true; busy = false; closeDialog(); }
+  function showCard(html) {
+    busy = true; $("card").innerHTML = html; $("overlay").hidden = false;
+    cardShownAt = performance.now();
+    const btns = cardButtons();
+    btns.forEach((b, i) => b.addEventListener("mouseenter", () => cardFocus(i)));
+    cardFocus(0);
+  }
+  // 메뉴·장 완료 화면: 방향키로 버튼 사이를 옮기고 Space·Enter 로 누른다
+  let cardShownAt = 0;
+  const cardButtons = () => [...$("card").querySelectorAll("button")];
+  function cardFocus(i) {
+    const btns = cardButtons(); if (!btns.length) return;
+    const n = (i + btns.length) % btns.length;
+    btns.forEach((b, j) => b.classList.toggle("sel", j === n));
+    btns[n].focus({ preventScroll: true });
+    btns[n].scrollIntoView({ block: "nearest" });
+  }
+  function cardKey(e) {
+    const btns = cardButtons(); if (!btns.length) return false;
+    const cur = Math.max(0, btns.findIndex(b => b.classList.contains("sel")));
+    const d = { ArrowUp: -1, KeyW: -1, ArrowLeft: -1, KeyA: -1, ArrowDown: 1, KeyS: 1, ArrowRight: 1, KeyD: 1, Tab: e.shiftKey ? -1 : 1 }[e.code];
+    if (d !== undefined) { cardFocus(cur + d); return true; }
+    if (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter") {
+      if (!e.repeat && performance.now() - cardShownAt > 250) btns[cur].click();   // 직전 화면에서 누른 키로 바로 눌리지 않게
+      return true;
+    }
+    return false;
+  }
+  function hideCard() { $("overlay").hidden = true; busy = false; closeDialog(); document.activeElement?.blur(); }
 
   function showMenu() {
     const list = CHAPTERS.map((c, i) => `<button type="button" data-i="${i}"><span class="num">${i + 1}</span><span><b>${c.title.replace(/^\d+장\.\s*/, "")}</b><small>${c.intro}</small></span><span class="mark">${state.cleared.includes(c.id) ? "완료" : (i === state.ch && state.step > 0 ? "진행 중" : "")}</span></button>`).join("");
@@ -381,7 +408,7 @@
         <kbd>미니맵</kbd><span>오른쪽 위 전체 지도. 노란 점이 목표, 파란 점이 나. 누르면 그곳을 봅니다</span>
         <kbd>방향키 · WASD</kbd><span>한 칸씩 이동</span>
         <kbd>Space · Enter</kbd><span>옆에 있는 대상과 대화, 대사 넘기기</span>
-        <kbd>↑ ↓ + Space</kbd><span>선택지를 위아래로 옮기고 Space(또는 Enter)로 고르기. 숫자 1~4 로 바로 골라도 됩니다</span>
+        <kbd>방향키 + Space</kbd><span>퀴즈 보기, 장 선택 메뉴, 장 완료 화면 모두 방향키로 옮기고 Space(또는 Enter)로 고르기. 퀴즈는 숫자 1~4 로 바로 골라도 됩니다</span>
         <kbd>노란 !</kbd><span>지금 찾아가야 할 대상. 화면 밖이면 가장자리 화살표가 방향을 알려 줍니다</span>
       </div>
       <p class="sub">틀리면 하트가 하나 줄고 이유를 알려 줘요. 하트 다섯 개를 다 쓰면 그 장을 다시 합니다.</p>
@@ -454,6 +481,7 @@
   // ------------------------------------------------------------------ 입력
   const KEYMAP = { ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down", ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right" };
   addEventListener("keydown", (e) => {
+    if (!$("overlay").hidden) { if (cardKey(e)) e.preventDefault(); return; }
     if (choicePick && /^(Digit|Numpad)[1-4]$/.test(e.code)) { choicePick(+e.code.slice(-1) - 1); e.preventDefault(); return; }
     if (choiceMove) {
       if (e.repeat && (e.code === "Space" || e.code === "Enter")) { e.preventDefault(); return; }  // 대사 넘기다 누른 채로 선택되는 것 방지
@@ -469,7 +497,7 @@
     if (k) { held.delete(k); held.add(k); player.path = []; player.pendingTalk = null; e.preventDefault(); }
   });
   addEventListener("keyup", (e) => {
-    if (choiceMove && (e.code === "Space" || e.code === "Enter")) e.preventDefault();   // 버튼 기본 동작(keyup 클릭) 막기
+    if ((choiceMove || !$("overlay").hidden) && (e.code === "Space" || e.code === "Enter")) e.preventDefault();   // 버튼 기본 동작(keyup 클릭) 막기
     const k = KEYMAP[e.code]; if (k) held.delete(k);
   });
   addEventListener("blur", () => held.clear());

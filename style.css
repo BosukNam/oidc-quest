@@ -96,7 +96,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; text-align: left;
   background: var(--choice); border: 2px solid #4b5aa8; border-radius: 8px; padding: 10px 14px;
 }
-.chapters button:hover { background: var(--choice-hover); border-color: var(--gold); }
+.chapters button:hover, .chapters button.sel { background: var(--choice-hover); border-color: var(--gold); }
+.btn.sel { outline: 3px solid var(--gold); outline-offset: 2px; }
 .chapters b { font-family: var(--f-display); font-weight: 400; font-size: 18px; }
 .chapters small { display: block; color: var(--muted); font-size: 13px; line-height: 1.45; }
 .chapters .mark { font-family: var(--f-display); color: var(--ok); font-size: 15px; }
