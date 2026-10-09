@@ -9,14 +9,14 @@
   const NPCS = window.NPCS, CHAPTERS = window.CHAPTERS, ITEMS = window.ITEMS;
 
   const BUILDINGS = [
-    { x: 3,  y: 6, w: 8, h: 6, name: "DB 서고",      wall: "#e9efe2", roof: "#2f9e44", trim: "#1e6b2f" },
-    { x: 17, y: 5, w: 8, h: 6, name: "백엔드 관제실", wall: "#dfe6ee", roof: "#2b6cb0", trim: "#1c4a7a" },
-    { x: 29, y: 6, w: 7, h: 5, name: "레디스 금고",   wall: "#f3e4e4", roof: "#c92a2a", trim: "#8a1c1c" },
-    { x: 37, y: 2, w: 5, h: 8, name: "SSO 탑",       wall: "#e5dbff", roof: "#5f3dc4", trim: "#3b2491", tower: true },
+    { x: 3,  y: 6, w: 8, h: 6, name: "주민 명부",     wall: "#e9efe2", roof: "#2f9e44", trim: "#1e6b2f" },
+    { x: 17, y: 5, w: 8, h: 6, name: "포털",         wall: "#dfe6ee", roof: "#2b6cb0", trim: "#1c4a7a" },
+    { x: 29, y: 6, w: 7, h: 5, name: "보관함",       wall: "#f3e4e4", roof: "#c92a2a", trim: "#8a1c1c" },
+    { x: 37, y: 2, w: 5, h: 8, name: "신분증 발급소", wall: "#e5dbff", roof: "#5f3dc4", trim: "#3b2491", tower: true },
   ];
   const AREA_LABELS = [
-    { x: 21, y: 17.2, text: "브라우저 광장" },
-    { x: 39, y: 21.3, text: "말로리의 골목" },
+    { x: 21, y: 17.2, text: "광장" },
+    { x: 39, y: 21.3, text: "수상한 골목" },
   ];
 
   // ------------------------------------------------------------------ 지도 만들기
@@ -174,8 +174,8 @@
   const $ = (id) => document.getElementById(id);
   const canvas = $("world"), ctx = canvas.getContext("2d");
   const store = {
-    load() { try { return JSON.parse(localStorage.getItem("oidcQuest.v1") || "null"); } catch { return null; } },
-    save(s) { try { localStorage.setItem("oidcQuest.v1", JSON.stringify(s)); } catch {} },
+    load() { try { return JSON.parse(localStorage.getItem("oidcQuest.v2") || "null"); } catch { return null; } },
+    save(s) { try { localStorage.setItem("oidcQuest.v2", JSON.stringify(s)); } catch {} },
   };
   const saved = store.load();
   const state = {
@@ -205,7 +205,7 @@
   function renderHud() {
     $("chTitle").textContent = chapter().title;
     $("goal").textContent = goalText();
-    $("hearts").innerHTML = "보안 신뢰도 " + Array.from({ length: 5 }, (_, i) => `<span class="${i < state.hearts ? "" : "lost"}">♥</span>`).join("");
+    $("hearts").innerHTML = "하트 " + Array.from({ length: 5 }, (_, i) => `<span class="${i < state.hearts ? "" : "lost"}">♥</span>`).join("");
     $("inv").innerHTML = state.items.map(id => `<span class="chip" title="${ITEMS[id].desc}"><i style="background:${ITEMS[id].color}"></i>${ITEMS[id].label}</span>`).join("");
   }
   let toastTimer = 0;
@@ -263,7 +263,7 @@
     renderHud(); persist();
     if (state.hearts === 0) {
       closeDialog();
-      showCard(`<h2>보안 사고 발생</h2><p>신뢰도가 바닥났습니다. 이 장을 처음부터 다시 해 봅시다. 해설을 떠올리면 금방입니다.</p>
+      showCard(`<h2>하트가 다 떨어졌어요</h2><p>괜찮아요. 방금 본 해설을 떠올리면서 이 장을 다시 해 봐요. 금방이에요.</p>
         <div class="row-btns"><button class="btn primary" id="retryBtn" type="button">이 장 다시 하기</button></div>`);
       $("retryBtn").onclick = () => { hideCard(); startChapter(state.ch); };
       return false;
@@ -281,7 +281,8 @@
       if (step && step.at === id) await runStep(step);
       else if (step && step.trap && step.trap.at === id) {
         for (const [w, t] of step.trap.lines) await say(w, t);
-        await say("해설", "공격자가 올린 키로 검증했습니다. 신뢰도 -1", "bad");
+        shake();
+        await say("땡!", "견본은 발급소 공식 게시판 것만 믿어야 해요. (하트 -1)", "bad");
         await loseHeart();
       } else {
         await say(n.name, n.idle);
@@ -297,8 +298,9 @@
     if (step.choice) {
       for (;;) {
         const pick = await ask(step.choice.q, step.choice.opts);
-        if (pick.ok) { await say("정답", pick.fb, "ok"); break; }
-        await say("해설", pick.fb + "  (신뢰도 -1)", "bad");
+        if (pick.ok) { celebrate(); await say("정답!", pick.fb, "ok"); break; }
+        shake();
+        await say("땡!", pick.fb + "  (하트 -1)", "bad");
         if (!(await loseHeart())) return;
       }
     }
@@ -315,8 +317,11 @@
     persist();
     closeDialog();
     const next = state.ch + 1 < CHAPTERS.length ? state.ch + 1 : null;
-    showCard(`<h2>${ch.title} 완료</h2><p class="sub">면접에서 이렇게 말할 수 있으면 됩니다.</p>
+    showCard(`<h2>${ch.title} 완료!</h2>
       <ul>${ch.takeaways.map(t => `<li>${t}</li>`).join("")}</ul>
+      <p class="sub">게임 속 비유의 진짜 이름</p>
+      <div class="terms"><table><thead><tr><th>게임에서</th><th>진짜 이름</th><th>하는 일</th></tr></thead>
+      <tbody>${(ch.terms || []).map(([a, b, c]) => `<tr><td>${a}</td><td><b>${b}</b></td><td>${c}</td></tr>`).join("")}</tbody></table></div>
       <div class="row-btns">${next !== null ? `<button class="btn primary" id="nextCh" type="button">${CHAPTERS[next].title}</button>` : `<button class="btn primary" id="endBtn" type="button">엔딩 보기</button>`}
       <button class="btn" id="toMenu" type="button">장 선택</button></div>`);
     if (next !== null) $("nextCh").onclick = () => { hideCard(); startChapter(next); };
@@ -325,8 +330,8 @@
   }
 
   function showEnding() {
-    showCard(`<h2>당직 끝</h2><p>로그인 흐름, 공격 네 가지, 키 교체, 인증과 인가까지 모두 지나왔습니다. 마을은 오늘도 평화롭습니다.</p>
-      <p class="sub">한 문장 요약: OIDC 는 SSO 가 서명한 ID 토큰으로 '누구인가'를 알려 주고, 우리는 state·nonce·PKCE·서명·클레임으로 그 증명을 검증한 뒤, '무엇을 할 수 있나'는 우리 DB 로 정한다.</p>
+    showCard(`<h2>모두 끝!</h2><p>입장권 받기, 말로리 막기, 들어온 다음, 도장 교체까지 모두 해냈어요. 마을은 오늘도 평화롭습니다.</p>
+      <p class="sub">한 문장 요약: OIDC 는 신분증 발급소(SSO)가 도장(서명) 찍은 입장권(ID 토큰)으로 '누구인지'를 알려 주는 방식이고, 포털은 도장이 진짜인지만 확인한 뒤 '무엇을 할 수 있는지'는 자기 명부로 정한다.</p>
       <div class="row-btns"><button class="btn primary" id="toMenu2" type="button">장 선택</button></div>`);
     $("toMenu2").onclick = showMenu;
   }
@@ -347,7 +352,7 @@
   function showMenu() {
     const list = CHAPTERS.map((c, i) => `<button type="button" data-i="${i}"><span class="num">${i + 1}</span><span><b>${c.title.replace(/^\d+장\.\s*/, "")}</b><small>${c.intro}</small></span><span class="mark">${state.cleared.includes(c.id) ? "완료" : (i === state.ch && state.step > 0 ? "진행 중" : "")}</span></button>`).join("");
     showCard(`<h1>OIDC 퀘스트</h1>
-      <p class="sub">당신은 사내 포털의 백엔드 개발자입니다. 마을을 돌아다니며 브라우저, 레디스, DB, SSO 를 잇고, 말로리의 공격을 막아 내세요.</p>
+      <p class="sub">당신은 포털 입구를 지키는 직원입니다. 손님이 비밀번호를 포털에 알려 주지 않고도 들어올 수 있게 도와주고, 사기꾼 말로리를 막아 내세요. 어려운 용어 없이, 장이 끝날 때 진짜 이름을 알려 드려요.</p>
       <div class="chapters">${list}</div>
       <div class="row-btns">${state.started && state.step > 0 ? `<button class="btn primary" id="resume" type="button">이어서 하기</button>` : ""}<button class="btn" id="howBtn" type="button">조작법</button></div>
       <p class="foot">진행 상황은 이 브라우저에만 저장됩니다.</p>`);
@@ -367,7 +372,7 @@
         <kbd>1 ~ 4</kbd><span>선택지 고르기</span>
         <kbd>노란 !</kbd><span>지금 찾아가야 할 대상. 화면 밖이면 가장자리 화살표가 방향을 알려 줍니다</span>
       </div>
-      <p class="sub">틀린 선택을 하면 보안 신뢰도가 줄고 해설이 나옵니다. 다섯 번 틀리면 그 장을 다시 합니다.</p>
+      <p class="sub">틀리면 하트가 하나 줄고 이유를 알려 줘요. 하트 다섯 개를 다 쓰면 그 장을 다시 합니다.</p>
       <div class="row-btns"><button class="btn primary" id="okHelp" type="button">닫기</button><button class="btn" id="helpMenu" type="button">장 선택</button></div>`);
     $("okHelp").onclick = () => { if (!state.started) showMenu(); else hideCard(); };
     $("helpMenu").onclick = showMenu;
@@ -622,6 +627,26 @@
   }
 
   let elapsed = 0;
+  const sparks = [];
+  let shakeT = 0;
+  function celebrate() {
+    const cols = ["#ffd43b", "#69db7c", "#74c0fc", "#f783ac", "#ffffff"];
+    for (let i = 0; i < 36; i++) {
+      const a = Math.random() * Math.PI * 2, v = 40 + Math.random() * 70;
+      sparks.push({ x: player.fx + 8, y: player.fy + 4, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, life: 0.9 + Math.random() * 0.4, c: cols[i % cols.length] });
+    }
+  }
+  function shake() { if (!reduceMotion) shakeT = 0.35; }
+  function drawSparks(dt) {
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const p = sparks[i];
+      p.life -= dt; if (p.life <= 0) { sparks.splice(i, 1); continue; }
+      p.vy += 160 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      ctx.fillStyle = p.c; ctx.globalAlpha = Math.min(1, p.life * 2);
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+    }
+    ctx.globalAlpha = 1;
+  }
   function draw() {
     const { dpr, scale } = view;
     // 카메라
@@ -635,7 +660,9 @@
     }
     const cx = clampX(fx + view.panX), cy = clampY(fy + view.panY);
     view.panX = cx - fx; view.panY = cy - fy;
-    view.camX = Math.round(cx * scale) / scale; view.camY = Math.round(cy * scale) / scale;
+    let sx = 0, sy = 0;
+    if (shakeT > 0) { shakeT -= 1 / 60; sx = (Math.random() - 0.5) * 6; sy = (Math.random() - 0.5) * 6; }
+    view.camX = Math.round((cx + sx) * scale) / scale; view.camY = Math.round((cy + sy) * scale) / scale;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "#1b2a1d"; ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -663,6 +690,7 @@
     const ents = Object.entries(NPCS).map(([id, n]) => ({ y: n.y * T, draw: () => drawNpc(id, n, elapsed) }));
     ents.push({ y: player.fy + 0.5, draw: () => drawPerson(Math.round(player.fx), Math.round(player.fy), "#1098ad", "#2b1d14", player.dir, player.phase, !!player.moving) });
     ents.sort((a, b) => a.y - b.y).forEach(e => e.draw());
+    drawSparks(1 / 60);
 
     // 목표 표시
     const tid = targetId();
