@@ -240,15 +240,27 @@
       shuffled.forEach((o, i) => {
         const b = document.createElement("button"); b.type = "button";
         b.innerHTML = `<kbd>${i + 1}</kbd><span></span>`; b.lastChild.textContent = o.t;
-        b.addEventListener("click", (e) => { e.stopPropagation(); choicePick = null; resolve(o); });
+        b.addEventListener("click", (e) => { e.stopPropagation(); choicePick = null; choiceMove = null; resolve(o); });
+        b.addEventListener("mouseenter", () => highlight(i));
         dlgChoices.appendChild(b);
       });
-      choicePick = (n) => { if (shuffled[n]) { choicePick = null; resolve(shuffled[n]); } };
-      dlgChoices.firstChild?.focus({ preventScroll: true });
+      let sel = 0;
+      const highlight = (i) => {
+        sel = (i + shuffled.length) % shuffled.length;
+        [...dlgChoices.children].forEach((el, j) => el.classList.toggle("sel", j === sel));
+        dlgChoices.children[sel].focus({ preventScroll: true });
+      };
+      choicePick = (n) => { if (shuffled[n]) { choicePick = null; choiceMove = null; resolve(shuffled[n]); } };
+      const askedAt = performance.now();
+      choiceMove = (d) => {
+        if (d !== 0) highlight(sel + d);
+        else if (performance.now() - askedAt > 250) choicePick(sel);   // 대사를 넘긴 그 키 입력으로 바로 골라지지 않게
+      };
+      highlight(0);
     });
   }
-  let choicePick = null;
-  function closeDialog() { dlg.hidden = true; advance = null; choicePick = null; }
+  let choicePick = null, choiceMove = null;   // 선택지: 번호로 고르기 / 위아래로 옮기고 Space·Enter 로 고르기
+  function closeDialog() { dlg.hidden = true; advance = null; choicePick = null; choiceMove = null; }
   dlg.addEventListener("click", () => advance && advance());
 
   function setItems(take = [], give = []) {
@@ -369,7 +381,7 @@
         <kbd>미니맵</kbd><span>오른쪽 위 전체 지도. 노란 점이 목표, 파란 점이 나. 누르면 그곳을 봅니다</span>
         <kbd>방향키 · WASD</kbd><span>한 칸씩 이동</span>
         <kbd>Space · Enter</kbd><span>옆에 있는 대상과 대화, 대사 넘기기</span>
-        <kbd>1 ~ 4</kbd><span>선택지 고르기</span>
+        <kbd>↑ ↓ + Space</kbd><span>선택지를 위아래로 옮기고 Space(또는 Enter)로 고르기. 숫자 1~4 로 바로 골라도 됩니다</span>
         <kbd>노란 !</kbd><span>지금 찾아가야 할 대상. 화면 밖이면 가장자리 화살표가 방향을 알려 줍니다</span>
       </div>
       <p class="sub">틀리면 하트가 하나 줄고 이유를 알려 줘요. 하트 다섯 개를 다 쓰면 그 장을 다시 합니다.</p>
@@ -442,7 +454,12 @@
   // ------------------------------------------------------------------ 입력
   const KEYMAP = { ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down", ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right" };
   addEventListener("keydown", (e) => {
-    if (choicePick && /^Digit[1-4]$/.test(e.code)) { choicePick(+e.code.slice(5) - 1); e.preventDefault(); return; }
+    if (choicePick && /^(Digit|Numpad)[1-4]$/.test(e.code)) { choicePick(+e.code.slice(-1) - 1); e.preventDefault(); return; }
+    if (choiceMove) {
+      if (e.repeat && (e.code === "Space" || e.code === "Enter")) { e.preventDefault(); return; }  // 대사 넘기다 누른 채로 선택되는 것 방지
+      const d = { ArrowUp: -1, KeyW: -1, ArrowLeft: -1, KeyA: -1, ArrowDown: 1, KeyS: 1, ArrowRight: 1, KeyD: 1, Space: 0, Enter: 0, NumpadEnter: 0 }[e.code];
+      if (d !== undefined) { choiceMove(d); e.preventDefault(); return; }
+    }
     if (e.code === "Space" || e.code === "Enter") {
       if (advance) { advance(); e.preventDefault(); return; }
       if (!busy && document.activeElement?.tagName !== "BUTTON") { const id = adjacentNpc(); if (id) talk(id); e.preventDefault(); }
@@ -451,7 +468,10 @@
     const k = KEYMAP[e.code];
     if (k) { held.delete(k); held.add(k); player.path = []; player.pendingTalk = null; e.preventDefault(); }
   });
-  addEventListener("keyup", (e) => { const k = KEYMAP[e.code]; if (k) held.delete(k); });
+  addEventListener("keyup", (e) => {
+    if (choiceMove && (e.code === "Space" || e.code === "Enter")) e.preventDefault();   // 버튼 기본 동작(keyup 클릭) 막기
+    const k = KEYMAP[e.code]; if (k) held.delete(k);
+  });
   addEventListener("blur", () => held.clear());
 
   let view = { scale: 3, camX: 0, camY: 0, w: 0, h: 0, dpr: 1, panX: 0, panY: 0, recenter: false };
